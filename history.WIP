@@ -1,0 +1,32 @@
+    1  python scan_builder.py
+    2  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+    3  . .devcontainer/login.sh 
+    4  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+    5  python scan_builder.py
+    6  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+    7  python scan_builder.py
+    8  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+    9  python scan_builder.py
+   10  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+   11  ls output
+   12  ls output/2025-06-03T17-38
+   13  python scan_builder.py
+   14  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+   15  python scan_builder.py
+   16  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/accessanalyzer.json
+   17  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/account.json
+   18  history > history.WIP
+   19  python scan_builder.py
+   20  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+   21  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/s3_buckets.json
+   22  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+   23  python scan_builder.py
+   24  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/s3.json
+   25  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/accounts.json
+   26  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/account.json
+   27  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/athena.json
+   28  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/backup.json
+   29  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/bedrock-agent-runtime.json
+   30  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/bedrock.json
+   31  python scan.py -r us-east-1 -s /workspaces/aws-auto-inventory/scan/sample/services/chatbot.json
+   32  history > history.WIP

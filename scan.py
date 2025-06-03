@@ -41,6 +41,11 @@ class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):
             return o.isoformat()
+        if isinstance(o, bytes):
+            try:
+                return o.decode('utf-8')
+            except UnicodeDecodeError:
+                return o.decode('latin-1', errors='replace')
         return super().default(o)
 
 
@@ -64,7 +69,7 @@ def setup_logging(log_dir, log_level):
     return logging.getLogger(__name__)
 
 
-def api_call_with_retry(client, function_name, parameters, max_retries, retry_delay):
+def api_call_with_retry(log, client, function_name, parameters, max_retries, retry_delay):
     """
     Make an API call with exponential backoff.
 
@@ -76,7 +81,9 @@ def api_call_with_retry(client, function_name, parameters, max_retries, retry_de
         for attempt in range(max_retries):
             try:
                 function_to_call = getattr(client, function_name)
-                if parameters:
+                log.info(f"function_to_call: {function_name}")
+                if parameters and isinstance(parameters, dict):
+                    log.info(f"function_to_call params: {parameters}")
                     return function_to_call(**parameters)
                 else:
                     return function_to_call()
@@ -115,6 +122,9 @@ def _get_service_data(session, region_name, service, log, max_retries, retry_del
     Returns:
     service_data -- The service data.
     """
+    if "function" not in service:
+        log.error(f"Service definition missing 'function' key: {service}")
+        return None
 
     function = service["function"]
     result_key = service.get("result_key", None)
@@ -137,8 +147,13 @@ def _get_service_data(session, region_name, service, log, max_retries, retry_del
                 region_name,
             )
             return None
+
+        if function in ["get_paginator", "get_waiter"]:
+            log.warning(f"Skipping function {function} as it requires an argument.")
+            return None
+
         api_call = api_call_with_retry(
-            client, function, parameters, max_retries, retry_delay
+            log, client, function, parameters, max_retries, retry_delay
         )
         
         if result_key and result_key.startswith('.'):
@@ -147,8 +162,16 @@ def _get_service_data(session, region_name, service, log, max_retries, retry_del
             response = api_call().get(result_key)
         else:
             response = api_call()
+            log.debug(f"Response type: {type(response)}")
+            log.debug(f"Response content: {response}")
             if isinstance(response, dict):
                 response.pop("ResponseMetadata", None)
+            elif isinstance(response, bytes):
+                try:
+                    response = response.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    log.error(f"Error decoding bytes response for service {service['service']} in region {region_name}: {e}")
+                    response = str(response)  # Convert to string representation to avoid JSON serialization errors
     except Exception as exception:
         log.error(
             "Error while processing %s, %s.\n%s: %s",
@@ -176,7 +199,7 @@ def _get_service_data(session, region_name, service, log, max_retries, retry_del
 
 
 def process_region(
-    region, services, session, log, max_retries, retry_delay, concurrent_services
+    region, services, session, log, max_retries, retry_delay, concurrent_services, workers
 ):
     """
     Processes a single AWS region.
@@ -189,6 +212,7 @@ def process_region(
     max_retries -- The maximum number of retries for each service.
     retry_delay -- The delay before each retry.
     concurrent_services -- The number of services to process concurrently for each region.
+    workers -- The number of worker threads to use.
 
     Returns:
     region_results -- The scan results for the region.
@@ -218,11 +242,18 @@ def process_region(
                 result = future.result()
                 if result is not None and result["result"]:
                     region_results.append(result)
-                    log.info("Successfully processed service: %s", service["service"])
+                    if "service" in service:
+                        log.info("Successfully processed service: %s", service["service"])
+                elif result is not None:
+                    if "service" in service:
+                        log.info("No data found for service: %s", service["service"])
                 else:
-                    log.info("No data found for service: %s", service["service"])
+                    log.error("No result found for service")
             except Exception as exc:
-                log.error("%r generated an exception: %s" % (service["service"], exc))
+                if "service" in service:
+                    log.error("%r generated an exception: %s" % (service["service"], exc))
+                else:
+                    log.error("A service generated an exception: %s" % exc)
                 log.error(traceback.format_exc())
 
     log.info("Finished processing for region: %s", region)
@@ -304,8 +335,9 @@ def main(
     start_time = time.time()
 
     results = []
+    workers = args.workers if args.workers else args.concurrent_regions
     with concurrent.futures.ThreadPoolExecutor(
-        max_workers=concurrent_regions
+        max_workers=workers
     ) as executor:
         future_to_region = {
             executor.submit(
@@ -317,6 +349,7 @@ def main(
                 max_retries,
                 retry_delay,
                 concurrent_services,
+                workers,
             ): region
             for region in regions
         }
@@ -335,7 +368,9 @@ def main(
                         os.path.join(directory, f"{service_result['service']}-{service_result['function']}.json"),
                         "w",
                     ) as f:
+                        log.info(f"START WRITING RESULTS: {service_result['service']} FILE")
                         json.dump(service_result["result"], f, cls=DateTimeEncoder)
+                        log.info(f"DONE WRITING RESULTS: {service_result['service']} FILE")
             except Exception as exc:
                 log.error("%r generated an exception: %s" % (region, exc))
                 log.error(traceback.format_exc())
@@ -392,6 +427,12 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Number of services to process concurrently for each region. Default is None, which means the script will use as many as possible",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads to use. Defaults to concurrent_regions if not provided.",
     )
     # Organization scanning arguments
     parser.add_argument(
